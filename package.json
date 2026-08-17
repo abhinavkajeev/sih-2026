@@ -1,0 +1,17 @@
+{
+  "name": "sih-2026-digital-learning-platform",
+  "version": "1.0.0",
+  "description": "Digital Learning Platform for Rural School Students in Nabha - SIH25019",
+  "private": true,
+  "workspaces": ["web", "server", "ai-engine"],
+  "scripts": {
+    "dev:web": "cd web && npm run dev",
+    "dev:server": "cd server && npm run dev",
+    "dev:ai": "cd ai-engine && uvicorn main:app --reload",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
+    "install:all": "npm install && cd web && npm install && cd ../server && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
