@@ -1,10 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { SUBJECTS } from '@/lib/constants';
 
-export default function AskDoubtPage() {
+function AskDoubtForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [form, setForm] = useState({ question: '', subject: searchParams.get('subject') || 'mathematics', language: 'hi' });
@@ -63,5 +63,13 @@ export default function AskDoubtPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AskDoubtPage() {
+  return (
+    <Suspense fallback={<div className="max-w-2xl mx-auto p-6 text-muted">Loading...</div>}>
+      <AskDoubtForm />
+    </Suspense>
   );
 }
