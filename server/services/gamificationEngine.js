@@ -49,29 +49,50 @@ const processActivity = async (activity) => {
       };
     }
 
-    // 3. Calculate Base XP
-    const config = XP_CONFIG[activityType] || { base: 10, maxBonus: 0 };
-    let xpEarned = config.base;
-    let improvementBonus = 0;
+    // 3. Calculate Base XP & Determine if Valid Activity
     let achievementUnlocked = null;
+    let improvementBonus = 0;
+    
+    // SECURITY CHECK: Daily XP Cap
+    const startOfDay = new Date(activityDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(activityDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    // Sum XP earned today
+    const xpEarnedToday = profile.xpHistory
+      .filter(h => h.earnedAt >= startOfDay && h.earnedAt <= endOfDay)
+      .reduce((sum, h) => sum + h.amount, 0);
 
-    // 4. Adaptive Improvement Calculation (Crucial UX Principle)
-    if (typeof score === 'number' && typeof previousScore === 'number') {
-      const improvement = score - previousScore;
-      if (improvement > 0) {
-        // Reward improvement, not just raw high scores
-        improvementBonus = Math.min(Math.floor(improvement * 0.5), config.maxBonus);
-        xpEarned += improvementBonus;
-        
-        if (improvement >= 20) {
-          achievementUnlocked = { type: 'badge', name: 'Comeback Kid', icon: '🌱' };
+    const DAILY_XP_CAP = 2000;
+    let xpEarned = 0;
+
+    if (xpEarnedToday >= DAILY_XP_CAP) {
+      logger.warn(`User ${userId} hit daily XP cap on ${activityDate.toDateString()}.`);
+      // Still process the activity for stats, but yield 0 XP.
+      xpEarned = 0;
+    } else {
+      const config = XP_CONFIG[activityType] || { base: 10, maxBonus: 0 };
+      xpEarned = config.base;
+
+      // 4. Adaptive Improvement Calculation (Crucial UX Principle)
+      if (typeof score === 'number' && typeof previousScore === 'number') {
+        const improvement = score - previousScore;
+        if (improvement > 0) {
+          // Reward improvement, not just raw high scores
+          improvementBonus = Math.min(Math.floor(improvement * 0.5), config.maxBonus);
+          xpEarned += improvementBonus;
+          
+          if (improvement >= 20) {
+            achievementUnlocked = { type: 'badge', name: 'Comeback Kid', icon: '🌱' };
+          }
         }
       }
-    }
 
-    // High score bonus
-    if (score >= 90) {
-      xpEarned += 10; // Mastery bonus
+      // High score bonus
+      if (score >= 90) {
+        xpEarned += 10; // Mastery bonus
+      }
     }
 
     // 5. Meaningful Streak Engine
