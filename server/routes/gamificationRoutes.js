@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   getGamificationProfile, getLeaderboard, getDailyChallenges,
-  completeDailyChallenge, getRewards, redeemReward, getBadges, getDailyDiscovery
+  completeDailyChallenge, getRewards, redeemReward, getBadges, getDailyDiscovery, syncOfflineActivities
 } = require('../controllers/gamificationController');
 const { protect } = require('../middleware/auth');
 const { roleCheck } = require('../middleware/roleCheck');
@@ -15,5 +15,6 @@ router.get('/rewards', protect, getRewards);
 router.post('/rewards/:id/redeem', protect, roleCheck('student'), redeemReward);
 router.get('/badges', protect, getBadges);
 router.get('/daily-discovery', protect, getDailyDiscovery);
+router.post('/sync', protect, roleCheck('student'), syncOfflineActivities);
 
 module.exports = router;

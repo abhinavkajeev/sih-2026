@@ -9,6 +9,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import * as Network from 'expo-network';
+import OfflineSyncManager from './services/OfflineSyncManager';
 
 const { width } = Dimensions.get('window');
 
@@ -231,6 +233,24 @@ const RegisterScreen = ({ navigation }) => {
 const HomeScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const [stats, setStats] = useState({ xp: 1250, level: 3, levelName: 'Expert', streak: 7, coins: 340, xpProgress: 65 });
+  const [isOffline, setIsOffline] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    // Check network periodically and try syncing
+    const interval = setInterval(async () => {
+      const net = await Network.getNetworkStateAsync();
+      const offline = !(net.isConnected && net.isInternetReachable);
+      if (isOffline !== offline) setIsOffline(offline);
+
+      if (!offline) {
+        setIsSyncing(true);
+        await OfflineSyncManager.attemptSync();
+        setIsSyncing(false);
+      }
+    }, 10000); // Check every 10s
+    return () => clearInterval(interval);
+  }, [isOffline]);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} showsVerticalScrollIndicator={false}>
@@ -246,8 +266,16 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Offline / Sync Indicator */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, backgroundColor: 'rgba(0,0,0,0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start' }}>
+          <Text style={{ fontSize: 12 }}>{isOffline ? '🟠' : isSyncing ? '☁️' : '🟢'}</Text>
+          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600', marginLeft: 6 }}>
+            {isOffline ? 'Offline Mode (Progress Saved Locally)' : isSyncing ? 'Syncing progress...' : 'Online & Synced'}
+          </Text>
+        </View>
+
         {/* XP Bar */}
-        <View style={{ marginTop: 20, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 14 }}>
+        <View style={{ marginTop: 16, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 14 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>⭐ Level {stats.level} — {stats.levelName}</Text>
             <Text style={{ color: '#ddd6fe', fontSize: 12 }}>{stats.xp} XP</Text>
@@ -482,6 +510,27 @@ Question: "${doubtText}"`;
     setLoading(true);
 
     try {
+      const net = await Network.getNetworkStateAsync();
+      const offline = !(net.isConnected && net.isInternetReachable);
+
+      if (offline) {
+        // RURAL-FIRST OFFLINE FALLBACK
+        await OfflineSyncManager.addActivityToQueue({
+          activityType: 'doubt_asked',
+          metadata: { question: question.trim(), subject: selectedSubject, language: selectedLang }
+        });
+
+        Alert.alert(
+          'Saved for Later 🟠',
+          'You are currently offline. Your question has been safely saved! We will fetch the AI answer automatically as soon as you connect to the internet.'
+        );
+        
+        setRecentDoubts(prev => [{ q: question, status: 'Pending Sync', statusColor: '#f59e0b' }, ...prev]);
+        setQuestion('');
+        setLoading(false);
+        return;
+      }
+
       // 1. Try calling our local backend server first
       const res = await api.post('/doubts', {
         question: question.trim(),
@@ -492,26 +541,10 @@ Question: "${doubtText}"`;
       if (res.data?.data?.aiResponse?.answer) {
         setAiResponse(res.data.data.aiResponse);
         setRecentDoubts(prev => [{ q: question, status: 'AI Answered', statusColor: '#3b82f6' }, ...prev]);
-        setLoading(false);
-        return;
       }
     } catch (backendError) {
-      // Backend didn't return or was offline, fallback to direct Gemini call
-    }
-
-    try {
-      // Direct Gemini 2.5 Flash query (if client-side direct call needed)
-      // Removed direct client call for security. Relying on backend only.
-      setAiResponse({
-        answer: `[AI Explanation for ${selectedSubject}]:\n\nRegarding "${question}":\nTo understand this concept, remember the fundamental rule: break the problem into smaller parts and review the basic definition from your class textbook. Feel free to ask your teacher or call the AI hotline!`,
-        confidence: 0.85,
-      });
-      setLoading(false);
-    } catch (err) {
-      setAiResponse({
-        answer: `[AI Explanation for ${selectedSubject}]:\n\nRegarding "${question}":\nTo understand this concept, remember the fundamental rule: break the problem into smaller parts and review the basic definition from your class textbook. Feel free to ask your teacher or call the AI hotline!`,
-        confidence: 0.85,
-      });
+      // Backend didn't return or was offline, fallback handled
+      Alert.alert('Connection Error', 'Could not reach the server. Please try again later.');
     }
 
     setLoading(false);

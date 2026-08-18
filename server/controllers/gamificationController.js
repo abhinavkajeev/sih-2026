@@ -216,8 +216,41 @@ const getDailyDiscovery = async (req, res, next) => {
   }
 };
 
+// @desc    Sync offline activities
+const syncOfflineActivities = async (req, res, next) => {
+  try {
+    const { activities } = req.body;
+    if (!Array.isArray(activities)) {
+      return res.status(400).json({ success: false, message: 'Invalid payload' });
+    }
+
+    const gamificationEngine = require('../services/gamificationEngine');
+    const results = [];
+
+    // Sort by timestamp so older activities are processed first
+    const sortedActivities = activities.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    for (const activity of sortedActivities) {
+      const result = await gamificationEngine.processActivity({
+        userId: req.user.id,
+        activityType: activity.activityType,
+        activityId: activity.activityId,
+        score: activity.score,
+        previousScore: activity.previousScore,
+        metadata: activity.metadata,
+        timestamp: activity.timestamp // Preserve the offline timestamp
+      });
+      results.push(result);
+    }
+
+    res.status(200).json({ success: true, processed: results.length, data: results });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getGamificationProfile, getLeaderboard, getDailyChallenges,
   completeDailyChallenge, getRewards, redeemReward, getBadges,
-  getDailyDiscovery,
+  getDailyDiscovery, syncOfflineActivities,
 };

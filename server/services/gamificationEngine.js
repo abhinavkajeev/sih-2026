@@ -23,7 +23,8 @@ const XP_CONFIG = {
  */
 const processActivity = async (activity) => {
   try {
-    const { userId, activityType, activityId, score, previousScore, metadata } = activity;
+    const { userId, activityType, activityId, score, previousScore, metadata, timestamp } = activity;
+    const activityDate = timestamp ? new Date(timestamp) : new Date();
 
     // 1. Fetch or create profile
     let profile = await Gamification.findOne({ user: userId });
@@ -32,10 +33,10 @@ const processActivity = async (activity) => {
     }
 
     // 2. Anti-Farming & Rate Limiting Check
-    // If the student did the exact same activity in the last 5 minutes, yield no XP.
-    const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
-    const recentDuplicate = profile.xpHistory.find(
-      h => h.metadata?.activityId === activityId && h.earnedAt > fiveMinsAgo
+    // If the student did the exact same activity within 5 minutes of this activityDate
+    const fiveMinsBefore = new Date(activityDate.getTime() - 5 * 60 * 1000);
+    const recentDuplicate = profile.activityLog.find(
+      h => h.activityId === activityId && h.timestamp > fiveMinsBefore && h.timestamp <= activityDate
     );
 
     if (recentDuplicate) {
@@ -74,14 +75,16 @@ const processActivity = async (activity) => {
     }
 
     // 5. Meaningful Streak Engine
-    // Streak only increments on meaningful activities, not just logging in.
-    const today = new Date().toDateString();
+    const actionDay = activityDate.toDateString();
     const lastActive = profile.streak.lastActiveDate ? profile.streak.lastActiveDate.toDateString() : null;
     let streakUpdated = false;
 
-    if (lastActive !== today) {
-      const yesterday = new Date(Date.now() - 86400000).toDateString();
-      if (lastActive === yesterday) {
+    if (lastActive !== actionDay) {
+      // Check if actionDay is exactly 1 day after lastActive
+      const previousDayMs = activityDate.getTime() - 86400000;
+      const expectedPreviousDay = new Date(previousDayMs).toDateString();
+
+      if (lastActive === expectedPreviousDay) {
         profile.streak.current += 1;
         if (profile.streak.current > profile.streak.longest) {
           profile.streak.longest = profile.streak.current;
@@ -91,7 +94,7 @@ const processActivity = async (activity) => {
           xpEarned += 50; // Milestone bonus
           achievementUnlocked = { type: 'streak', name: `${profile.streak.current}-Day Knowledge Streak`, icon: '🔥' };
         }
-      } else {
+      } else if (new Date(lastActive) < activityDate) {
         // Reset streak but check for comeback mechanic
         if (profile.streak.current > 0) {
           achievementUnlocked = { type: 'badge', name: 'Welcome Back!', icon: '👋' };
@@ -99,7 +102,11 @@ const processActivity = async (activity) => {
         }
         profile.streak.current = 1;
       }
-      profile.streak.lastActiveDate = new Date();
+      
+      // Update last active date only if the activity is newer than what we have
+      if (!profile.streak.lastActiveDate || activityDate > profile.streak.lastActiveDate) {
+        profile.streak.lastActiveDate = activityDate;
+      }
       streakUpdated = true;
     }
 
@@ -136,7 +143,7 @@ const processActivity = async (activity) => {
     }
 
     // Activity logging for anti-farming (keep last 50)
-    profile.activityLog.push({ activityId, activityType });
+    profile.activityLog.push({ activityId, activityType, timestamp: activityDate });
     if (profile.activityLog.length > 50) {
       profile.activityLog.shift();
     }
