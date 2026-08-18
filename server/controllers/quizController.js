@@ -156,6 +156,16 @@ const submitAttempt = async (req, res, next) => {
       metadata: { subject: quiz.subject, difficulty: quiz.difficulty }
     });
 
+    // AI Insight Integration: Generate a mission if the student is struggling
+    let newMission = null;
+    if (percentage < 60) {
+      newMission = await gamificationEngine.generatePersonalizedMissionFromAI(req.user.id, {
+        weakTopic: quiz.title,
+        recommendedDifficulty: 'easy',
+        subject: quiz.subject
+      });
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -164,7 +174,8 @@ const submitAttempt = async (req, res, next) => {
         percentage,
         answers: processedAnswers,
         isPerfect: percentage === 100,
-        gamification: gamificationResult
+        gamification: gamificationResult,
+        newMission
       },
     });
   } catch (error) {

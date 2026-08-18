@@ -54,6 +54,31 @@ const gamificationSchema = new mongoose.Schema(
       challenge: { type: mongoose.Schema.Types.ObjectId, ref: 'DailyChallenge' },
       completedAt: Date,
     }],
+    activeMissions: [{
+      title: String,
+      description: String,
+      missionType: { type: String, enum: ['practice', 'comeback', 'mastery', 'explorer'] },
+      target: Number,
+      progress: { type: Number, default: 0 },
+      xpReward: Number,
+      subject: String,
+      expiresAt: Date,
+      isCompleted: { type: Boolean, default: false }
+    }],
+    subjectXP: {
+      type: Map,
+      of: Number,
+      default: {}
+    },
+    improvementScore: {
+      type: Number,
+      default: 0
+    },
+    activityLog: [{
+      activityId: String,
+      activityType: String,
+      timestamp: { type: Date, default: Date.now }
+    }],
   },
   {
     timestamps: true,

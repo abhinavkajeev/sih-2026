@@ -109,6 +109,38 @@ const processActivity = async (activity) => {
     // addXP method handles xp, coins, xpHistory push, and level recalculation
     profile.addXP(xpEarned, `Completed ${activityType}`, ['lesson', 'quiz', 'doubt', 'streak', 'challenge', 'bonus'].includes(activityType.split('_')[0]) ? activityType.split('_')[0] : 'bonus');
 
+    // Update new tracking metrics
+    if (metadata?.subject) {
+      const currentSubXP = profile.subjectXP.get(metadata.subject) || 0;
+      profile.subjectXP.set(metadata.subject, currentSubXP + xpEarned);
+    }
+
+    if (improvementBonus > 0) {
+      profile.improvementScore += improvementBonus;
+    }
+
+    // Process active missions
+    let missionCompleted = null;
+    if (profile.activeMissions && profile.activeMissions.length > 0) {
+      for (const mission of profile.activeMissions) {
+        if (!mission.isCompleted && (!mission.subject || mission.subject === metadata?.subject)) {
+          mission.progress += 1;
+          if (mission.progress >= mission.target) {
+            mission.isCompleted = true;
+            missionCompleted = mission;
+            profile.addXP(mission.xpReward, `Mission Completed: ${mission.title}`, 'challenge');
+            achievementUnlocked = { type: 'mission', name: mission.title, icon: '🎯' };
+          }
+        }
+      }
+    }
+
+    // Activity logging for anti-farming (keep last 50)
+    profile.activityLog.push({ activityId, activityType });
+    if (profile.activityLog.length > 50) {
+      profile.activityLog.shift();
+    }
+
     await profile.save();
 
     // 7. Badge & Level Unlocks
@@ -119,6 +151,15 @@ const processActivity = async (activity) => {
     }
     if (streakUpdated) {
       await checkAndAwardBadges(userId, 'streak_days', profile.streak.current);
+    }
+    if (improvementBonus >= 10) { // Improvement metric
+      await checkAndAwardBadges(userId, 'improvement', 1);
+    }
+    if (achievementUnlocked && achievementUnlocked.name === 'Welcome Back!') {
+      await checkAndAwardBadges(userId, 'comeback', 1);
+    }
+    if (missionCompleted) {
+      await checkAndAwardBadges(userId, 'mission_completed', 1);
     }
     
     return {
@@ -141,6 +182,49 @@ const processActivity = async (activity) => {
   }
 };
 
+/**
+ * Processes an AI learning insight and generates a personalized mission for the student.
+ * 
+ * @param {string} userId 
+ * @param {Object} aiInsight { weakTopic: 'Fractions', recommendedDifficulty: 'medium', subject: 'Mathematics' }
+ */
+const generatePersonalizedMissionFromAI = async (userId, aiInsight) => {
+  try {
+    const profile = await Gamification.findOne({ user: userId });
+    if (!profile) return null;
+
+    // Filter out expired or completed missions
+    profile.activeMissions = profile.activeMissions.filter(m => !m.isCompleted && new Date() < new Date(m.expiresAt));
+
+    // If they already have 3 active missions, don't overload them
+    if (profile.activeMissions.length >= 3) {
+      return null;
+    }
+
+    const newMission = {
+      title: `${aiInsight.weakTopic || aiInsight.subject} Explorer Mission`,
+      description: `We noticed you've been working hard. Let's master ${aiInsight.weakTopic || 'this topic'} together! Complete 3 practices.`,
+      missionType: 'practice',
+      target: 3,
+      progress: 0,
+      xpReward: 150,
+      subject: aiInsight.subject || 'General',
+      expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days
+    };
+
+    profile.activeMissions.push(newMission);
+    await profile.save();
+    
+    logger.info(`Generated AI personalized mission for user ${userId}: ${newMission.title}`);
+    return newMission;
+  } catch (error) {
+    logger.error(`Error generating AI mission: ${error.message}`);
+    // Non-blocking failure
+    return null;
+  }
+};
+
 module.exports = {
-  processActivity
+  processActivity,
+  generatePersonalizedMissionFromAI
 };

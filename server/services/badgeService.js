@@ -59,6 +59,33 @@ const DEFAULT_BADGES = [
     xpBonus: 500,
     rarity: 'legendary',
   },
+  {
+    name: 'Comeback Kid',
+    description: 'Return after a break and complete a lesson',
+    icon: '🌱',
+    category: 'improvement',
+    criteria: { type: 'comeback', threshold: 1 },
+    xpBonus: 100,
+    rarity: 'uncommon',
+  },
+  {
+    name: 'Most Improved',
+    description: 'Improve your score significantly on a previous quiz',
+    icon: '📈',
+    category: 'improvement',
+    criteria: { type: 'improvement', threshold: 1 },
+    xpBonus: 100,
+    rarity: 'rare',
+  },
+  {
+    name: 'Weakness Crusher',
+    description: 'Complete a personalized AI mission on a weak topic',
+    icon: '💪',
+    category: 'mastery',
+    criteria: { type: 'mission_completed', threshold: 1 },
+    xpBonus: 150,
+    rarity: 'epic',
+  },
 ];
 
 /**
