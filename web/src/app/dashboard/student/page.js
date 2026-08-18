@@ -9,8 +9,9 @@ import Link from 'next/link';
 export default function StudentDashboard() {
   const { user } = useAuth();
   const { t } = useLanguage();
-  const [stats, setStats] = useState({ xp: 0, level: 1, levelName: 'Beginner', streak: 0, coins: 0, xpProgress: 0, lessonsCompleted: 0, quizzesAttempted: 0, doubtsAsked: 0 });
+  const [stats, setStats] = useState({ xp: 0, level: 1, levelName: 'Beginner', streak: { current: 0 }, coins: 0, xpProgress: 0, activeMissions: [] });
   const [challenges, setChallenges] = useState([]);
+  const [dailyDiscovery, setDailyDiscovery] = useState(null);
   const [recentLessons, setRecentLessons] = useState([]);
 
   useEffect(() => {
@@ -19,14 +20,16 @@ export default function StudentDashboard() {
 
   const loadDashboardData = async () => {
     try {
-      const [gamRes, challengeRes, lessonRes] = await Promise.allSettled([
+      const [gamRes, challengeRes, lessonRes, discoveryRes] = await Promise.allSettled([
         api.get('/gamification/profile'),
         api.get('/gamification/challenges'),
         api.get('/lessons?limit=4'),
+        api.get('/gamification/daily-discovery')
       ]);
       if (gamRes.status === 'fulfilled') setStats(gamRes.value.data.data);
       if (challengeRes.status === 'fulfilled') setChallenges(challengeRes.value.data.data);
       if (lessonRes.status === 'fulfilled') setRecentLessons(lessonRes.value.data.data);
+      if (discoveryRes.status === 'fulfilled') setDailyDiscovery(discoveryRes.value.data.data);
     } catch (err) {
       console.error('Dashboard load error:', err);
     }
@@ -35,105 +38,109 @@ export default function StudentDashboard() {
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Welcome Banner */}
-      <div className="rounded-2xl p-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white relative overflow-hidden">
+      <div className="rounded-2xl p-6 bg-gradient-to-r from-purple-600 to-indigo-600 text-white relative overflow-hidden shadow-lg">
         <div className="relative z-10">
-          <p className="text-purple-200 text-sm">{t('welcome')} 👋</p>
-          <h1 className="text-2xl font-bold mt-1">{user?.name || 'Student'}</h1>
-          <p className="text-purple-100 text-sm mt-1">Keep going! You&apos;re doing great today 🔥</p>
-        </div>
-        <div className="absolute right-6 top-1/2 -translate-y-1/2 text-7xl opacity-20">🎓</div>
-      </div>
-
-      {/* XP Bar */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">⭐</span>
-            <span className="font-semibold">Level {stats.level} — {stats.levelName}</span>
+          <p className="text-purple-200 text-sm font-medium">Good evening, {user?.name || 'Student'}!</p>
+          <h1 className="text-3xl font-extrabold mt-1">🔥 {stats.streak?.current || 0}-Day Knowledge Streak</h1>
+          
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-semibold text-sm">⭐ Level {stats.level} — {stats.levelName}</span>
+              <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-md">{stats.xp} XP</span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-black/20 overflow-hidden">
+              <div className="h-full bg-yellow-400 transition-all duration-1000" style={{ width: `${stats.xpProgress || 0}%` }}></div>
+            </div>
           </div>
-          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{stats.xp} {t('xp')}</span>
         </div>
-        <div className="w-full h-3 rounded-full" style={{ background: 'var(--gray-200)' }}>
-          <div className="xp-bar h-3" style={{ width: `${stats.xpProgress || 0}%` }}></div>
-        </div>
+        <div className="absolute right-2 -top-4 text-9xl opacity-10">🌍</div>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { icon: '🔥', label: t('streak'), value: `${stats.streak?.current || 0} days`, color: 'from-orange-500 to-red-500' },
-          { icon: '💰', label: t('coins'), value: stats.coins || 0, color: 'from-yellow-500 to-amber-500' },
-          { icon: '📚', label: t('lessons'), value: stats.lessonsCompleted || 0, color: 'from-blue-500 to-cyan-500' },
-          { icon: '📝', label: t('quizzes'), value: stats.quizzesAttempted || 0, color: 'from-green-500 to-emerald-500' },
+          { icon: '🔥', label: t('streak'), value: `${stats.streak?.current || 0} days` },
+          { icon: '💰', label: t('coins'), value: stats.coins || 0 },
+          { icon: '📈', label: 'Improvement', value: `+${stats.improvementScore || 0}` },
+          { icon: '🏆', label: 'Badges', value: stats.badges?.length || 0 },
         ].map((stat) => (
-          <div key={stat.label} className="card text-center hover:scale-105 transition-transform">
-            <span className="text-2xl">{stat.icon}</span>
-            <p className="text-2xl font-bold mt-2" style={{ color: 'var(--text-primary)' }}>{stat.value}</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{stat.label}</p>
+          <div key={stat.label} className="card text-center hover:-translate-y-1 transition-transform border border-slate-100 shadow-sm">
+            <span className="text-3xl">{stat.icon}</span>
+            <p className="text-xl font-bold mt-2 text-slate-800">{stat.value}</p>
+            <p className="text-xs mt-1 text-slate-500 font-medium">{stat.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Daily Challenges */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">🎯 {t('challenges')}</h2>
-          <Link href="/dashboard/student/challenges" className="text-sm text-purple-500 hover:underline">View All</Link>
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Active AI Missions */}
+        <div className="card border-l-4 border-l-orange-500">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800">🎯 Today&apos;s Missions</h2>
+          </div>
+          <div className="space-y-3">
+            {stats.activeMissions && stats.activeMissions.length > 0 ? (
+              stats.activeMissions.map((mission, i) => (
+                <div key={i} className="bg-orange-50 p-3 rounded-xl border border-orange-100">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-orange-900 text-sm">{mission.title}</p>
+                      <p className="text-xs text-orange-700 mt-1">{mission.description}</p>
+                    </div>
+                    <span className="bg-orange-200 text-orange-800 text-xs font-bold px-2 py-1 rounded-md">+{mission.xpReward} XP</span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex-1 h-2 bg-orange-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-orange-500" style={{ width: `${(mission.progress / mission.target) * 100}%` }}></div>
+                    </div>
+                    <span className="text-xs font-bold text-orange-800">{mission.progress} / {mission.target}</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="bg-slate-50 p-4 rounded-xl text-center border border-slate-100">
+                <p className="text-sm text-slate-500">You&apos;re all caught up! Keep exploring.</p>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="space-y-3">
-          {challenges.length > 0 ? challenges.slice(0, 3).map((challenge) => (
-            <div key={challenge._id} className="flex items-center justify-between p-3 rounded-xl" style={{ background: 'var(--bg-secondary)' }}>
-              <div>
-                <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{challenge.title}</p>
-                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{challenge.description}</p>
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-medium text-purple-500">+{challenge.xpReward} XP</span>
-                {challenge.isCompleted && <span className="block text-xs text-green-500">✅ Done</span>}
-              </div>
+
+        {/* Daily Discovery */}
+        {dailyDiscovery && (
+          <div className="card bg-gradient-to-br from-slate-900 to-slate-800 text-white relative overflow-hidden group cursor-pointer hover:shadow-xl transition-all">
+            <div className="absolute right-0 top-0 text-7xl opacity-10 group-hover:scale-110 transition-transform duration-500">🌌</div>
+            <h2 className="text-sm font-bold text-blue-300 mb-1">{dailyDiscovery.title}</h2>
+            <p className="text-lg font-bold mb-3">{dailyDiscovery.description}</p>
+            <div className="bg-white/10 p-3 rounded-lg backdrop-blur-sm mb-4">
+              <p className="text-xs text-slate-300 mb-2 font-medium">Quick Question (Read time: {dailyDiscovery.readTime})</p>
+              <p className="text-sm font-semibold text-white">{dailyDiscovery.question}</p>
             </div>
-          )) : (
-            <p className="text-sm text-center py-4" style={{ color: 'var(--text-secondary)' }}>No challenges today</p>
-          )}
-        </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-medium text-slate-400">Unlock: {dailyDiscovery.reward}</span>
+              <button className="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-full transition-colors">
+                Discover (+{dailyDiscovery.xpReward} XP)
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { href: '/dashboard/student/doubts/ask', icon: '❓', label: t('askDoubt'), color: 'bg-purple-50 hover:bg-purple-100' },
-          { href: '/dashboard/student/lessons', icon: '📖', label: t('lessons'), color: 'bg-blue-50 hover:bg-blue-100' },
-          { href: '/dashboard/student/quizzes', icon: '📝', label: t('quizzes'), color: 'bg-green-50 hover:bg-green-100' },
-          { href: '/dashboard/student/leaderboard', icon: '🏆', label: t('leaderboard'), color: 'bg-yellow-50 hover:bg-yellow-100' },
+          { href: '/dashboard/student/doubts/ask', icon: '❓', label: 'Ask AI', desc: 'Got a doubt?', color: 'bg-purple-50 hover:bg-purple-100 text-purple-900' },
+          { href: '/dashboard/student/lessons', icon: '🌍', label: 'Explore', desc: 'Knowledge World', color: 'bg-blue-50 hover:bg-blue-100 text-blue-900' },
+          { href: '/dashboard/student/quizzes', icon: '⚡', label: 'Play', desc: 'Mini-games', color: 'bg-green-50 hover:bg-green-100 text-green-900' },
+          { href: '/dashboard/student/leaderboard', icon: '🏆', label: 'Compete', desc: 'Leaderboard', color: 'bg-yellow-50 hover:bg-yellow-100 text-yellow-900' },
         ].map((action) => (
-          <Link key={action.label} href={action.href} className={`${action.color} rounded-xl p-4 text-center transition-colors`}>
-            <span className="text-3xl">{action.icon}</span>
-            <p className="text-sm font-medium mt-2" style={{ color: 'var(--text-primary)' }}>{action.label}</p>
+          <Link key={action.label} href={action.href} className={`${action.color} rounded-2xl p-4 text-center transition-all hover:shadow-md border border-black/5`}>
+            <span className="text-4xl block mb-2">{action.icon}</span>
+            <p className="text-sm font-bold">{action.label}</p>
+            <p className="text-xs opacity-70 mt-1 font-medium">{action.desc}</p>
           </Link>
         ))}
       </div>
-
-      {/* Recent Lessons */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">📚 Recent {t('lessons')}</h2>
-          <Link href="/dashboard/student/lessons" className="text-sm text-purple-500 hover:underline">View All</Link>
-        </div>
-        <div className="grid md:grid-cols-2 gap-3">
-          {recentLessons.length > 0 ? recentLessons.map((lesson) => (
-            <Link key={lesson._id} href={`/dashboard/student/lessons/${lesson._id}`} className="flex items-center gap-3 p-3 rounded-xl hover:shadow-md transition-all" style={{ background: 'var(--bg-secondary)' }}>
-              <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center text-xl">📖</div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate" style={{ color: 'var(--text-primary)' }}>{lesson.title}</p>
-                <p className="text-xs capitalize" style={{ color: 'var(--text-secondary)' }}>{lesson.subject} • Class {lesson.grade}</p>
-              </div>
-              <span className="text-xs text-purple-500">+{lesson.xpReward} XP</span>
-            </Link>
-          )) : (
-            <p className="text-sm py-4 col-span-2 text-center" style={{ color: 'var(--text-secondary)' }}>No lessons yet</p>
-          )}
-        </div>
-      </div>
+      <div className="pb-8"></div>
     </div>
   );
 }
