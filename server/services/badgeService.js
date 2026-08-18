@@ -55,9 +55,30 @@ const DEFAULT_BADGES = [
     description: 'Master your subjects in school',
     icon: '👑',
     category: 'special',
+    allowedGrades: ['middle', 'secondary', 'senior'],
     criteria: { type: 'lessons_completed', threshold: 50 },
     xpBonus: 500,
     rarity: 'legendary',
+  },
+  {
+    name: 'Algorithm Specialist',
+    description: 'Complete 5 CS missions',
+    icon: '⚡',
+    category: 'mastery',
+    allowedGrades: ['senior'],
+    criteria: { type: 'mission_completed', threshold: 5, stream: 'Computer Science' },
+    xpBonus: 300,
+    rarity: 'epic',
+  },
+  {
+    name: 'Playful Explorer',
+    description: 'Explore the learning world!',
+    icon: '🦄',
+    category: 'learning',
+    allowedGrades: ['primary'],
+    criteria: { type: 'lessons_completed', threshold: 5 },
+    xpBonus: 200,
+    rarity: 'epic',
   },
   {
     name: 'Comeback Kid',
@@ -114,11 +135,13 @@ const checkAndAwardBadges = async (userId, actionType, countValue = 1) => {
     const existingBadgeIds = gamification.badges.map((b) => b.badge.toString());
 
     // Find active badges matching this criteria that user doesn't already have
+    // Filter by allowedGrades
     const eligibleBadges = await Badge.find({
       _id: { $nin: existingBadgeIds },
       'criteria.type': actionType,
       'criteria.threshold': { $lte: countValue },
       isActive: true,
+      allowedGrades: { $in: [gamification.gradeCategory || 'middle'] }
     });
 
     const newUnlocked = [];
@@ -160,8 +183,13 @@ const checkAndAwardBadges = async (userId, actionType, countValue = 1) => {
  */
 const getUserBadges = async (userId) => {
   await seedBadges();
-  const allBadges = await Badge.find({ isActive: true }).lean();
   const gamification = await Gamification.findOne({ user: userId }).lean();
+  const userCategory = gamification?.gradeCategory || 'middle';
+  
+  const allBadges = await Badge.find({ 
+    isActive: true,
+    allowedGrades: { $in: [userCategory] }
+  }).lean();
 
   const earnedMap = new Map();
   if (gamification && gamification.badges) {

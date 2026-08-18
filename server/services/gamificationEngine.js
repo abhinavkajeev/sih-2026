@@ -214,12 +214,28 @@ const processActivity = async (activity) => {
  * Processes an AI learning insight and generates a personalized mission for the student.
  * 
  * @param {string} userId 
- * @param {Object} aiInsight { weakTopic: 'Fractions', recommendedDifficulty: 'medium', subject: 'Mathematics' }
+ * @param {Object} performanceData { weakTopic: 'Fractions', recommendedDifficulty: 'medium', subject: 'Mathematics' }
  */
-const generatePersonalizedMissionFromAI = async (userId, aiInsight) => {
+const generatePersonalizedMissionFromAI = async (userId, performanceData) => {
   try {
-    const profile = await Gamification.findOne({ user: userId });
+    const aiEngine = require('./ai/aiEngine');
+    const profile = await Gamification.findOne({ user: userId }).lean();
     if (!profile) return null;
+
+    const board = profile.board || 'CBSE';
+    const grade = profile.grade || 8;
+    const stream = profile.stream ? `Stream: ${profile.stream}` : '';
+
+    const context = `
+      Student Profile:
+      - Grade: Class ${grade} (${profile.gradeCategory || 'middle'})
+      - Board: ${board}
+      - ${stream}
+      - Recent Performance: Struggling with ${performanceData.weakTopic || 'recent topics'} in ${performanceData.subject}
+      
+      Generate a highly specific, curriculum-aligned gamification mission to help them improve.
+      Return ONLY a JSON object with 'title' (max 4 words, age-appropriate, e.g. 'Algorithm Arena' for Class 12 or 'Number Explorer' for Class 2), 'description' (short action item), 'target' (integer 1-5), and 'missionType' (practice, comeback, mastery).
+    `;
 
     // Filter out expired or completed missions
     profile.activeMissions = profile.activeMissions.filter(m => !m.isCompleted && new Date() < new Date(m.expiresAt));
@@ -229,14 +245,25 @@ const generatePersonalizedMissionFromAI = async (userId, aiInsight) => {
       return null;
     }
 
+    let title = `${performanceData.weakTopic || performanceData.subject} Explorer Mission`;
+    let desc = `We noticed you've been working hard. Let's master ${performanceData.weakTopic || 'this topic'} together! Complete 3 practices.`;
+
+    if (profile.gradeCategory === 'primary') {
+      title = `🌟 ${performanceData.subject} Stars!`;
+      desc = `Let's play with ${performanceData.weakTopic || 'this topic'} and collect 3 stars!`;
+    } else if (profile.gradeCategory === 'senior') {
+      title = `⚡ ${performanceData.weakTopic || 'Concept'} Mastery`;
+      desc = `Complete 3 advanced challenges to master this module.`;
+    }
+
     const newMission = {
-      title: `${aiInsight.weakTopic || aiInsight.subject} Explorer Mission`,
-      description: `We noticed you've been working hard. Let's master ${aiInsight.weakTopic || 'this topic'} together! Complete 3 practices.`,
+      title,
+      description: desc,
       missionType: 'practice',
       target: 3,
       progress: 0,
       xpReward: 150,
-      subject: aiInsight.subject || 'General',
+      subject: performanceData.subject || 'General',
       expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days
     };
 

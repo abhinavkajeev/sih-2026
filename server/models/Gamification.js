@@ -8,6 +8,12 @@ const gamificationSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    // Curriculum & Age Context
+    grade: { type: Number, default: 8 },
+    gradeCategory: { type: String, enum: ['primary', 'middle', 'secondary', 'senior'], default: 'middle' },
+    board: { type: String, default: 'CBSE' },
+    stream: { type: String, default: null }, // e.g., 'PCM+CS', 'Commerce', 'PCB'
+    subjects: [String],
     xp: {
       type: Number,
       default: 0,

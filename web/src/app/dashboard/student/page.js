@@ -9,7 +9,7 @@ import Link from 'next/link';
 export default function StudentDashboard() {
   const { user } = useAuth();
   const { t } = useLanguage();
-  const [stats, setStats] = useState({ xp: 0, level: 1, levelName: 'Beginner', streak: { current: 0 }, coins: 0, xpProgress: 0, activeMissions: [] });
+  const [stats, setStats] = useState({ xp: 0, level: 1, levelName: 'Beginner', streak: { current: 0 }, coins: 0, xpProgress: 0, activeMissions: [], gradeCategory: 'middle', stream: null });
   const [challenges, setChallenges] = useState([]);
   const [dailyDiscovery, setDailyDiscovery] = useState(null);
   const [recentLessons, setRecentLessons] = useState([]);
@@ -35,25 +35,37 @@ export default function StudentDashboard() {
     }
   };
 
+  // Grade-adaptive UI configurations
+  const isPrimary = stats.gradeCategory === 'primary';
+  const isSenior = stats.gradeCategory === 'senior';
+  const isCS = stats.stream === 'Computer Science';
+  
+  const bannerBg = isPrimary ? 'from-pink-500 to-orange-400' : isSenior ? (isCS ? 'from-emerald-700 to-teal-900' : 'from-slate-800 to-slate-900') : 'from-purple-600 to-indigo-600';
+  const bannerIcon = isPrimary ? '🦄' : isSenior ? (isCS ? '💻' : '⚡') : '🌍';
+
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Welcome Banner */}
-      <div className="rounded-2xl p-6 bg-gradient-to-r from-purple-600 to-indigo-600 text-white relative overflow-hidden shadow-lg">
+      <div className={`rounded-2xl p-6 bg-gradient-to-r ${bannerBg} text-white relative overflow-hidden shadow-lg`}>
         <div className="relative z-10">
-          <p className="text-purple-200 text-sm font-medium">Good evening, {user?.name || 'Student'}!</p>
-          <h1 className="text-3xl font-extrabold mt-1">🔥 {stats.streak?.current || 0}-Day Knowledge Streak</h1>
+          <p className="text-white/80 text-sm font-medium">Good evening, {user?.name || 'Student'}!</p>
+          <h1 className="text-3xl font-extrabold mt-1">
+            {isPrimary ? `⭐ ${stats.streak?.current || 0} Days of Fun!` : `🔥 ${stats.streak?.current || 0}-Day Knowledge Streak`}
+          </h1>
           
           <div className="mt-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="font-semibold text-sm">⭐ Level {stats.level} — {stats.levelName}</span>
-              <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-md">{stats.xp} XP</span>
+              <span className="font-semibold text-sm">
+                {isPrimary ? '✨ Explorer Level' : `⭐ Level ${stats.level} — ${stats.levelName}`}
+              </span>
+              {!isPrimary && <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-md">{stats.xp} XP</span>}
             </div>
             <div className="w-full h-2 rounded-full bg-black/20 overflow-hidden">
               <div className="h-full bg-yellow-400 transition-all duration-1000" style={{ width: `${stats.xpProgress || 0}%` }}></div>
             </div>
           </div>
         </div>
-        <div className="absolute right-2 -top-4 text-9xl opacity-10">🌍</div>
+        <div className="absolute right-2 -top-4 text-9xl opacity-10">{bannerIcon}</div>
       </div>
 
       {/* Stats Grid */}
