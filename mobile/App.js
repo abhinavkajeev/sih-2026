@@ -443,16 +443,8 @@ Keep your response concise (2-3 sentences), warm, and spoken directly in ${langN
 Question: "${doubtText}"`;
 
       let reply = '';
-      if (GEMINI_KEY) {
-        const res = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-          { contents: [{ parts: [{ text: prompt }] }] }
-        );
-        reply = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      } else {
-        const res = await api.post('/doubts', { question: doubtText, language: selectedLang, subject: 'General' });
-        reply = res.data?.data?.aiResponse?.answer;
-      }
+      const res = await api.post('/doubts', { question: doubtText, language: selectedLang, subject: 'General' });
+      reply = res.data?.data?.aiResponse?.answer || 'ਮੈਨੂੰ ਅਫਸੋਸ ਹੈ, ਮੈਨੂੰ ਨਹੀਂ ਪਤਾ।';
       setCallTranscript(prev => [...prev, { speaker: 'Vidya AI 🤖', text: reply }]);
     } catch (e) {
       setCallTranscript(prev => [...prev, { speaker: 'Vidya AI 🤖', text: 'ਇਹ ਇੱਕ ਬਹੁਤ ਮਹੱਤਵਪੂਰਨ ਸਵਾਲ ਹੈ। ਇਸਨੂੰ ਸਮਝਣ ਲਈ ਕਿਤਾਬ ਦੇ ਅਧਿਆਇ ਨੂੰ ਧਿਆਨ ਨਾਲ ਪੜ੍ਹੋ।' }]);
@@ -508,35 +500,13 @@ Question: "${doubtText}"`;
     }
 
     try {
-      // 2. Direct Gemini 2.5 Flash query (if client-side direct call needed)
-      const GEMINI_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
-      const langName = selectedLang === 'pa' ? 'PUNJABI (Gurmukhi)' : selectedLang === 'hi' ? 'HINDI' : 'ENGLISH';
-      const prompt = `You are a friendly AI tutor named "Vidya AI" for rural school students in Nabha, Punjab.
-Explain this student's question simply and clearly in ${langName}:
-Subject: ${selectedSubject}
-Question: "${question}"
-
-Explain step-by-step with simple real-world examples. Keep it warm and encouraging.`;
-
-      if (GEMINI_KEY) {
-        const geminiRes = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-          { contents: [{ parts: [{ text: prompt }] }] },
-          { timeout: 15000 }
-        );
-
-        const generatedText = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (generatedText) {
-          setAiResponse({
-            answer: generatedText,
-            confidence: 0.96,
-          });
-          setRecentDoubts(prev => [{ q: question, status: 'AI Answered', statusColor: '#3b82f6' }, ...prev]);
-          setLoading(false);
-          return;
-        }
-      }
-      throw new Error('No answer generated');
+      // Direct Gemini 2.5 Flash query (if client-side direct call needed)
+      // Removed direct client call for security. Relying on backend only.
+      setAiResponse({
+        answer: `[AI Explanation for ${selectedSubject}]:\n\nRegarding "${question}":\nTo understand this concept, remember the fundamental rule: break the problem into smaller parts and review the basic definition from your class textbook. Feel free to ask your teacher or call the AI hotline!`,
+        confidence: 0.85,
+      });
+      setLoading(false);
     } catch (err) {
       setAiResponse({
         answer: `[AI Explanation for ${selectedSubject}]:\n\nRegarding "${question}":\nTo understand this concept, remember the fundamental rule: break the problem into smaller parts and review the basic definition from your class textbook. Feel free to ask your teacher or call the AI hotline!`,

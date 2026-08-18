@@ -67,11 +67,15 @@ const askDoubt = async (req, res, next) => {
       questionType = 'voice';
       voiceUrl = req.file.path;
       try {
-        const sttResponse = await axios.post(`${process.env.AI_ENGINE_URL}/api/speech/transcribe`, {
-          audioPath: req.file.path,
+        const fs = require('fs');
+        const audioBuffer = fs.readFileSync(req.file.path);
+        const { transcribeAudio } = require('../services/speechToText');
+        const sttResponse = await transcribeAudio({
+          audioBuffer,
+          mimeType: req.file.mimetype,
           language: language || 'hi',
         });
-        questionText = sttResponse.data.transcript;
+        questionText = sttResponse.transcript;
       } catch (sttError) {
         logger.error(`STT failed: ${sttError.message}`);
         return res.status(500).json({ success: false, message: 'Could not process voice input' });

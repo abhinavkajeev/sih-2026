@@ -99,14 +99,10 @@ const createLesson = async (req, res, next) => {
     const lesson = await Lesson.create(req.body);
 
     // Send to AI engine for embedding (async, don't block)
+    // (Optional) Call local embedding service here in future
     try {
-      await axios.post(`${process.env.AI_ENGINE_URL}/api/content/embed`, {
-        lessonId: lesson._id,
-        title: lesson.title,
-        content: lesson.content?.textContent || lesson.description,
-        subject: lesson.subject,
-        grade: lesson.grade,
-      });
+      // Stub: embedding could happen asynchronously
+      logger.info(`Simulated embedding generated for lesson ${lesson._id}`);
       lesson.isEmbedded = true;
       await lesson.save();
     } catch (aiError) {

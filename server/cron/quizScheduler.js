@@ -19,7 +19,8 @@ cron.schedule('0 18 * * *', async () => {
 
     for (const lesson of newLessons) {
       try {
-        await axios.post(`${process.env.AI_ENGINE_URL}/api/quiz/generate`, {
+        const aiService = require('../services/aiService');
+        await aiService.generateQuiz({
           lessonId: lesson._id,
           subject: lesson.subject,
           grade: lesson.grade,

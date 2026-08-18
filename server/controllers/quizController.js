@@ -66,18 +66,19 @@ const generateAIQuiz = async (req, res, next) => {
   try {
     const { lessonId, subject, grade, numQuestions = 5, difficulty, language } = req.body;
 
-    const aiResponse = await axios.post(`${process.env.AI_ENGINE_URL}/api/quiz/generate`, {
+    const aiService = require('../services/aiService');
+    const aiResponse = await aiService.generateQuiz({
       lessonId, subject, grade, numQuestions, difficulty, language: language || 'hi',
     });
 
     const quiz = await Quiz.create({
-      title: aiResponse.data.title,
-      description: aiResponse.data.description,
+      title: aiResponse.title,
+      description: aiResponse.description,
       subject,
       grade,
       lesson: lessonId,
       teacher: req.user.id,
-      questions: aiResponse.data.questions,
+      questions: aiResponse.questions,
       isAIGenerated: true,
       language: language || 'hi',
     });
