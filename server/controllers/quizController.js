@@ -128,6 +128,13 @@ const submitAttempt = async (req, res, next) => {
 
     const percentage = Math.round((score / quiz.totalMarks) * 100);
 
+    // Find previous best score for this quiz to calculate improvement
+    const previousAttempts = quiz.attempts.filter(a => a.student.toString() === req.user.id);
+    let previousScore = 0;
+    if (previousAttempts.length > 0) {
+      previousScore = Math.max(...previousAttempts.map(a => a.percentage));
+    }
+
     quiz.attempts.push({
       student: req.user.id,
       score,
@@ -138,15 +145,16 @@ const submitAttempt = async (req, res, next) => {
     });
     await quiz.save();
 
-    // Award XP
-    let xpEarned = quiz.xpReward;
-    if (percentage === 100) xpEarned += 100; // Perfect score bonus
-
-    const gamification = await Gamification.findOne({ user: req.user.id });
-    if (gamification) {
-      gamification.addXP(xpEarned, `Quiz: ${quiz.title} (${percentage}%)`, 'quiz');
-      await gamification.save();
-    }
+    // Process through Adaptive Gamification Engine
+    const gamificationEngine = require('../services/gamificationEngine');
+    const gamificationResult = await gamificationEngine.processActivity({
+      userId: req.user.id,
+      activityType: 'quiz_completed',
+      activityId: quiz._id.toString(),
+      score: percentage,
+      previousScore: previousAttempts.length > 0 ? previousScore : null,
+      metadata: { subject: quiz.subject, difficulty: quiz.difficulty }
+    });
 
     res.status(200).json({
       success: true,
@@ -155,8 +163,8 @@ const submitAttempt = async (req, res, next) => {
         totalMarks: quiz.totalMarks,
         percentage,
         answers: processedAnswers,
-        xpEarned,
         isPerfect: percentage === 100,
+        gamification: gamificationResult
       },
     });
   } catch (error) {

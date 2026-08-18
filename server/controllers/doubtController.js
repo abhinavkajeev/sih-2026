@@ -115,14 +115,16 @@ const askDoubt = async (req, res, next) => {
       logger.warn(`AI doubt resolution failed: ${aiError.message}`);
     }
 
-    // Award XP for asking a doubt
-    const gamification = await Gamification.findOne({ user: req.user.id });
-    if (gamification) {
-      gamification.addXP(20, 'Asked a doubt', 'doubt');
-      await gamification.save();
-    }
+    // Process through Adaptive Gamification Engine
+    const gamificationEngine = require('../services/gamificationEngine');
+    const gamificationResult = await gamificationEngine.processActivity({
+      userId: req.user.id,
+      activityType: 'doubt_asked',
+      activityId: doubt._id.toString(),
+      metadata: { subject }
+    });
 
-    res.status(201).json({ success: true, data: doubt, xpEarned: 20 });
+    res.status(201).json({ success: true, data: doubt, gamification: gamificationResult });
   } catch (error) {
     next(error);
   }

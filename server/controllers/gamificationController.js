@@ -15,26 +15,19 @@ const getGamificationProfile = async (req, res, next) => {
       profile = await Gamification.create({ user: req.user.id });
     }
 
-    // Check & update streak
+    // Check if streak is broken
     const today = new Date().toDateString();
     const lastActive = profile.streak.lastActiveDate
       ? profile.streak.lastActiveDate.toDateString()
       : null;
 
-    if (lastActive !== today) {
+    if (lastActive && lastActive !== today) {
       const yesterday = new Date(Date.now() - 86400000).toDateString();
-      if (lastActive === yesterday) {
-        profile.streak.current += 1;
-        if (profile.streak.current > profile.streak.longest) {
-          profile.streak.longest = profile.streak.current;
-        }
-        // Streak XP
-        profile.addXP(10, `Day ${profile.streak.current} streak!`, 'streak');
-      } else if (lastActive !== today) {
-        profile.streak.current = 1;
+      if (lastActive !== yesterday) {
+        // Streak broken
+        profile.streak.current = 0;
+        await profile.save();
       }
-      profile.streak.lastActiveDate = new Date();
-      await profile.save();
     }
 
     // Calculate XP needed for next level
@@ -63,9 +56,14 @@ const getLeaderboard = async (req, res, next) => {
   try {
     const { type = 'school', period = 'weekly', limit = 50 } = req.query;
 
+    let sortParam = '-xp';
+    if (type === 'streak') sortParam = '-streak.longest';
+    // Most improved could be a virtual calculated from history or just rely on XP for now
+    if (type === 'most_improved') sortParam = '-xp'; // Placeholder for actual improvement metrics if added
+
     const gamificationProfiles = await Gamification.find()
       .populate('user', 'name avatar grade school section')
-      .sort('-xp')
+      .sort(sortParam)
       .limit(parseInt(limit));
 
     const rankings = gamificationProfiles.map((profile, index) => ({
@@ -75,6 +73,7 @@ const getLeaderboard = async (req, res, next) => {
       level: profile.level,
       levelName: profile.levelName,
       streak: profile.streak.current,
+      longestStreak: profile.streak.longest,
     }));
 
     res.status(200).json({ success: true, data: rankings });
@@ -126,18 +125,18 @@ const completeDailyChallenge = async (req, res, next) => {
     challenge.completedBy.push({ user: req.user.id });
     await challenge.save();
 
-    // Award XP and coins
-    const gamification = await Gamification.findOne({ user: req.user.id });
-    if (gamification) {
-      gamification.addXP(challenge.xpReward, `Challenge: ${challenge.title}`, 'challenge');
-      gamification.coins += challenge.coinReward;
-      await gamification.save();
-    }
+    // Process through Adaptive Gamification Engine
+    const gamificationEngine = require('../services/gamificationEngine');
+    const gamificationResult = await gamificationEngine.processActivity({
+      userId: req.user.id,
+      activityType: 'challenge_completed',
+      activityId: challenge._id.toString(),
+      metadata: { title: challenge.title }
+    });
 
     res.status(200).json({
       success: true,
-      xpEarned: challenge.xpReward,
-      coinsEarned: challenge.coinReward,
+      gamification: gamificationResult
     });
   } catch (error) {
     next(error);
@@ -199,7 +198,19 @@ const getBadges = async (req, res, next) => {
       isEarned: earnedBadgeIds.includes(badge._id.toString()),
     }));
 
-    res.status(200).json({ success: true, data: enrichedBadges });
+// @desc    Get daily discovery (Knowledge Card / Mini Challenge)
+const getDailyDiscovery = async (req, res, next) => {
+  try {
+    const discovery = {
+      title: "🌌 TODAY'S DISCOVERY",
+      description: "Why does the sky appear blue?",
+      readTime: "30 seconds",
+      question: "Which color of light is scattered the most by the Earth's atmosphere?",
+      options: ["Red", "Green", "Blue", "Yellow"],
+      reward: "Science Card: The Atmosphere",
+      xpReward: 30,
+    };
+    res.status(200).json({ success: true, data: discovery });
   } catch (error) {
     next(error);
   }
@@ -208,4 +219,5 @@ const getBadges = async (req, res, next) => {
 module.exports = {
   getGamificationProfile, getLeaderboard, getDailyChallenges,
   completeDailyChallenge, getRewards, redeemReward, getBadges,
+  getDailyDiscovery,
 };

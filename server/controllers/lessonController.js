@@ -178,17 +178,18 @@ const completeLesson = async (req, res, next) => {
     lesson.completedBy.push({ student: req.user.id });
     await lesson.save();
 
-    // Award XP
-    const gamification = await Gamification.findOne({ user: req.user.id });
-    if (gamification) {
-      gamification.addXP(lesson.xpReward, `Completed lesson: ${lesson.title}`, 'lesson');
-      await gamification.save();
-    }
+    const gamificationEngine = require('../services/gamificationEngine');
+    const gamificationResult = await gamificationEngine.processActivity({
+      userId: req.user.id,
+      activityType: 'lesson_completed',
+      activityId: lesson._id.toString(),
+      metadata: { subject: lesson.subject, title: lesson.title }
+    });
 
     res.status(200).json({
       success: true,
       message: 'Lesson completed!',
-      xpEarned: lesson.xpReward,
+      gamification: gamificationResult,
     });
   } catch (error) {
     next(error);
